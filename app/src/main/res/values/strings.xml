@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">WeatherApp</string>
+    <string name="api_key">66872f52afa125bd3d0da920ca18d9f7</string>
+    <string name="city_name">City name</string>
+    <string name="sunrise">Sunrise</string>
+    <string name="_5_00">5:00</string>
+    <string name="pressure">Pressure</string>
+    <string name="humidity">Humidity</string>
+    <string name="perfect">perfect</string>
+    <string name="air_quality">Air Quality</string>
+</resources>
