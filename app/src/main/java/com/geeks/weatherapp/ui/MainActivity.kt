@@ -1,4 +1,4 @@
-package com.geeks.weatherapp
+package com.geeks.weatherapp.ui
 
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
@@ -11,30 +11,42 @@ import androidx.appcompat.widget.SearchView
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Observer
+import com.geeks.weatherapp.R
+import com.geeks.weatherapp.data.model.CurrentWeather
+import com.geeks.weatherapp.data.model.Weather
+import com.geeks.weatherapp.data.repository.WeatherRepository
 import com.geeks.weatherapp.databinding.ActivityMainBinding
 import com.geeks.weatherapp.utils.WeatherRetrofit
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.tasks.Task
 import com.squareup.picasso.Picasso
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
+import retrofit2.Response
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
     private val binding by lazy {
         ActivityMainBinding.inflate(layoutInflater)
     }
-    private var city: String = ""
+    private var city: String = "Bishkek"
+    private val viewModel: MainViewModel by viewModels()
     private lateinit var fusedLocationProviderClient: FusedLocationProviderClient
 
+    @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
@@ -42,11 +54,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean {
-
-                if (query != null) {
-                    city = query
-                    getCurrentWeather(city)
-                }
+                query?.let { viewModel.fetchWeather(it) }
                 return true
             }
 
@@ -62,7 +70,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun fetchLocation() {
         val task: Task<Location> = fusedLocationProviderClient.lastLocation
-
 
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -91,22 +98,21 @@ class MainActivity : AppCompatActivity() {
                     object : Geocoder.GeocodeListener {
                         override fun onGeocode(addresses: MutableList<Address>) {
                             city = addresses[0].locality
+                            getCurrentWeather()
                         }
 
                     })
             } else {
                 val address =
                     geocoder.getFromLocation(it.latitude, it.longitude, 1) as List<Address>
-
                 city = address[0].locality
             }
-
-            getCurrentWeather(city)
         }
     }
 
     @SuppressLint("SetTextI18n")
-    private fun getCurrentWeather(city: String) {
+    private fun getCurrentWeather() {
+        viewModel.fetchWeather(city)
         GlobalScope.launch(Dispatchers.IO) {
             val response = try {
                 WeatherRetrofit.api.getCurrentWeather(
@@ -124,32 +130,35 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
             if (response.isSuccessful && response.body() != null) {
-                withContext(Dispatchers.Main) {
+                val data = response.body()!!
 
-                    val data = response.body()!!
+                val iconID = data.weather[0].icon
 
-                    val iconID = data.weather[0].icon
+                val imgUrl = "https://openweathermap.org/img/w/$iconID.png"
 
-                    val imgUrl = "https://openweathermap.org/img/w/$iconID.png"
+                Picasso.get().load(imgUrl).into(binding.imgWeather)
 
-                    Picasso.get().load(imgUrl).into(binding.imgWeather)
 
-                    binding.tvSunrise.text = SimpleDateFormat(
-                        "hh:mm a",
-                        Locale.ENGLISH
-                    ).format(data.sys.sunrise!! * 1000)
-                    binding.tvSunset.text =
-                        SimpleDateFormat("hh:mm a", Locale.ENGLISH).format(data.sys.sunset!! * 1000)
-
-                    binding.apply {
-                        tvDesc.text = data.weather[0].description
-                        tvWind.text = "${data.wind.speed.toString()} KM/H"
-                        tvCityName.text = "${data.name} ${data.sys.country}"
-                        tvTemp.text = "${data.main.temp?.toInt()}°C"
-                        tvHumidity.text = "${data.main.humidity}"
-                        tvPressure.text = "${data.main.pressure}"
-                        tvFeelLike.text = "Feel like: ${data.main.feels_like?.toInt()}°C"
-                    }
+                binding.apply {
+                    tvDesc.text = data.weather[0].description
+                    tvWind.text = "${data.wind.speed.toString()} KM/H"
+                    tvCityName.text = "${data.name} ${data.sys.country}"
+                    tvTemp.text = "${data.main.temp?.toInt()}°C"
+                    tvHumidity.text = "${data.main.humidity}"
+                    tvPressure.text = "${data.main.pressure}"
+                    tvFeelLike.text = "Feel like: ${data.main.feels_like?.toInt()}°C"
+                    tvSunrise.text =
+                        SimpleDateFormat(
+                            "hh:mm a",
+                            Locale.ENGLISH
+                        ).format(
+                            data.sys.sunrise!! * 1000
+                        )
+                    tvSunset.text =
+                        SimpleDateFormat(
+                            "hh:mm a", Locale.ENGLISH
+                        ).format(
+                            data.sys.sunset!! * 1000)
                 }
             }
         }
